@@ -53,30 +53,30 @@ You can use the scripts in this repository to generate synthetic ECG images for 
 
 2. Add information from various spreadsheets from the PTB-XL dataset to the WFDB header files:
 
-        python prepare_ptbxl_data.py \
-            -i ptb-xl/records100/00000 \
-            -d ptb-xl/ptbxl_database.csv \
-            -s ptb-xl/scp_statements.csv \
-            -o ptb-xl/records100/00000
+        python physionet-2024/prepare_ptbxl_data.py \
+            -i physionet.org/files/ptb-xl/1.0.3/records100/00000 \
+            -d physionet.org/files/ptb-xl/1.0.3/ptbxl_database.csv \
+            -s physionet.org/files/ptb-xl/1.0.3/scp_statements.csv \
+            -o physionet.org/files/ptb-xl/1.0.3/records100/00000
 
 3. [Generate synthetic ECG images](https://github.com/alphanumericslab/ecg-image-kit/tree/main/codes/ecg-image-generator) on the dataset:
 
         python gen_ecg_images_from_data_batch.py \
-            -i ptb-xl/records100/00000 \
-            -o ptb-xl/records100/00000 \
+            -i physionet.org/files/ptb-xl/1.0.3/records100/00000 \
+            -o physionet.org/files/ptb-xl/1.0.3/records100/00000 \
             --print_header
 
 4. Add the file locations for the synthetic ECG images to the WFDB header files. (The expected image filenames for record `12345.png` are of the form `12345-0.png`, `12345-1.png`, etc., which should be in the same folder.) You can use the `ptb-xl/records100/00000` folder for the `train_model` step:
 
         python add_image_filenames.py \
-            -i ptb-xl/records100/00000 \
-            -o ptb-xl/records100/00000
+            -i physionet.org/files/ptb-xl/1.0.3/records100/00000 \
+            -o physionet.org/files/ptb-xl/1.0.3/records100/00000
 
 5. Remove the waveforms, certain information about the waveforms, and the demographics and diagnoses to create a version of the data for inference. You can use the `ptb-xl/records100_hidden/00000` folder for the `run_model` step, but it would be better to repeat the above steps on a new subset of the data that you will not use to train your model:
 
         python remove_hidden_data.py \
-            -i ptb-xl/records100/00000 \
-            -o ptb-xl/records100_hidden/00000
+            -i physionet.org/files/ptb-xl/1.0.3/records100/00000 \
+            -o physionet.org/files/ptb-xl/1.0.3/records100_hidden/00000
 
 ## Which scripts I can edit?
 

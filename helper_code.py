@@ -44,7 +44,7 @@ def load_signals(record):
 
 # Load the image(s) for a record.
 def load_image(record):
-    from PIL import Image
+    from PIL import Image, ImageOps
 
     path = os.path.split(record)[0]
     image_files = get_image_files(record)
@@ -53,8 +53,21 @@ def load_image(record):
     for image_file in image_files:
         image_file_path = os.path.join(path, image_file)
         if os.path.isfile(image_file_path):
+            #Load image
             image = Image.open(image_file_path)
-            images.append(image)
+            image.show()
+            #Greyscale
+            image_greyscale = image.convert('L')
+            image_greyscale.show()
+            #Threshold
+            # TODO Add addaptive Gausian Thresholding
+            threshold = 115
+            image_thresholded = image_greyscale.point( lambda p: 255 if p > threshold else 0 )
+            image_thresholded.show()
+            # To mono
+            image_mono = image_thresholded.convert('1')
+            image_mono.show()
+            images.append(image_greyscale)
 
     return images
 

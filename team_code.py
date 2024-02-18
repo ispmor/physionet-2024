@@ -17,6 +17,13 @@ import sys
 
 from helper_code import *
 
+import neptune
+
+run = neptune.init_run(
+    project="puszkarski.bartosz/physionet-2024",
+    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkMDE0MzMyMy0yYzFiLTRlMGMtYjk0NC01MjQ5NTcyZGM1YmMifQ==",
+)
+
 ################################################################################
 #
 # Required functions. Edit these functions to add your code, but do not change the arguments of the functions.
@@ -25,50 +32,51 @@ from helper_code import *
 
 # Train your digitization model.
 def train_digitization_model(data_folder, model_folder, verbose):
+    return None
     # Find data files.
-    if verbose:
-        print('Training the digitization model...')
-        print('Finding the Challenge data...')
+    #if verbose:
+    #    print('Training the digitization model...')
+    #    print('Finding the Challenge data...')
 
-    records = find_records(data_folder)
-    num_records = len(records)
+    #records = find_records(data_folder)
+    #num_records = len(records)
 
-    if num_records == 0:
-        raise FileNotFoundError('No data was provided.')
+    #if num_records == 0:
+    #    raise FileNotFoundError('No data was provided.')
 
-    # Create a folder for the model if it does not already exist.
-    os.makedirs(model_folder, exist_ok=True)
+    ## Create a folder for the model if it does not already exist.
+    #os.makedirs(model_folder, exist_ok=True)
 
-    # Extract the features and labels.
-    if verbose:
-        print('Extracting features and labels from the data...')
+    ## Extract the features and labels.
+    #if verbose:
+    #    print('Extracting features and labels from the data...')
 
-    features = list()
+    #features = list()
 
-    for i in range(num_records):
-        if verbose:
-            width = len(str(num_records))
-            print(f'- {i+1:>{width}}/{num_records}: {records[i]}...')
+    #for i in range(num_records):
+    #    if verbose:
+    #        width = len(str(num_records))
+    #        print(f'- {i+1:>{width}}/{num_records}: {records[i]}...')
 
-        record = os.path.join(data_folder, records[i])
+    #    record = os.path.join(data_folder, records[i])
 
-        # Extract the features from the image...
-        current_features = extract_features(record)
-        features.append(current_features)
+    #    # Extract the features from the image...
+    #    current_features = extract_features(record)
+    #    features.append(current_features)
 
-    # Train the model.
-    if verbose:
-        print('Training the model on the data...')
+    ## Train the model.
+    #if verbose:
+    #    print('Training the model on the data...')
 
-    # This overly simple model uses the mean of these overly simple features as a seed for a random number generator.
-    model = np.mean(features)
+    ## This overly simple model uses the mean of these overly simple features as a seed for a random number generator.
+    #model = np.mean(features)
 
-    # Save the model.
-    save_digitization_model(model_folder, model)
+    ## Save the model.
+    #save_digitization_model(model_folder, model)
 
-    if verbose:
-        print('Done.')
-        print()
+    #if verbose:
+    #    print('Done.')
+    #    print()
 
 # Train your dx model.
 def train_dx_model(data_folder, model_folder, verbose):
@@ -126,6 +134,9 @@ def train_dx_model(data_folder, model_folder, verbose):
     # Fit the model.
     model = RandomForestClassifier(
         n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes, random_state=random_state).fit(features, dxs)
+    # TODO no validation
+    # TODO no neptune logging
+    # TODO custom model
 
     # Save the model.
     save_dx_model(model_folder, model, classes)
@@ -137,8 +148,9 @@ def train_dx_model(data_folder, model_folder, verbose):
 # Load your trained digitization model. This function is *required*. You should edit this function to add your code, but do *not*
 # change the arguments of this function. If you do not train a digitization model, then you can return None.
 def load_digitization_model(model_folder, verbose):
-    filename = os.path.join(model_folder, 'digitization_model.sav')
-    return joblib.load(filename)
+    #filename = os.path.join(model_folder, 'digitization_model.sav')
+    return None
+    #joblib.load(filename)
 
 # Load your trained dx classification model. This function is *required*. You should edit this function to add your code, but do
 # *not* change the arguments of this function. If you do not train a dx classification model, then you can return None.
@@ -149,24 +161,25 @@ def load_dx_model(model_folder, verbose):
 # Run your trained digitization model. This function is *required*. You should edit this function to add your code, but do *not*
 # change the arguments of this function.
 def run_digitization_model(digitization_model, record, verbose):
-    model = digitization_model['model']
+    return None
+    #model = digitization_model['model']
 
-    # Extract features.
-    features = extract_features(record)
+    ## Extract features.
+    #features = extract_features(record)
 
-    # Load the dimensions of the signal.
-    header_file = get_header_file(record)
-    header = load_text(header_file)
+    ## Load the dimensions of the signal.
+    #header_file = get_header_file(record)
+    #header = load_text(header_file)
 
-    num_samples = get_num_samples(header)
-    num_signals = get_num_signals(header)
+    #num_samples = get_num_samples(header)
+    #num_signals = get_num_signals(header)
 
-    # For a overly simply minimal working example, generate "random" waveforms.
-    seed = int(round(model + np.mean(features)))
-    signal = np.random.default_rng(seed=seed).uniform(low=-1000, high=1000, size=(num_samples, num_signals))
-    signal = np.asarray(signal, dtype=np.int16)
+    ## For a overly simply minimal working example, generate "random" waveforms.
+    #seed = int(round(model + np.mean(features)))
+    #signal = np.random.default_rng(seed=seed).uniform(low=-1000, high=1000, size=(num_samples, num_signals))
+    #signal = np.asarray(signal, dtype=np.int16)
 
-    return signal
+    #return signal
 
 # Run your trained dx classification model. This function is *required*. You should edit this function to add your code, but do
 # *not* change the arguments of this function.
@@ -180,6 +193,9 @@ def run_dx_model(dx_model, record, signal, verbose):
 
     # Get model probabilities.
     probabilities = model.predict_proba(features)
+    print(probabilities)
+    #[BUG] -> at least 2 classes are required in order to not fail here -
+    #otherwise error due to indexes
     probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
 
     # Choose the class(es) with the highest probability as the label(s).
@@ -216,3 +232,5 @@ def save_dx_model(model_folder, model, classes):
     d = {'model': model, 'classes': classes}
     filename = os.path.join(model_folder, 'dx_model.sav')
     joblib.dump(d, filename, protocol=0)
+
+
