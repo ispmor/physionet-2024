@@ -174,7 +174,7 @@ def run_digitization_model(digitization_model, record, verbose):
     #num_samples = get_num_samples(header)
     #num_signals = get_num_signals(header)
 
-    ## For a overly simply minimal working example, generate "random" waveforms.
+    ## For a overly simply minimal working example, generate "random" waveforms
     #seed = int(round(model + np.mean(features)))
     #signal = np.random.default_rng(seed=seed).uniform(low=-1000, high=1000, size=(num_samples, num_signals))
     #signal = np.asarray(signal, dtype=np.int16)

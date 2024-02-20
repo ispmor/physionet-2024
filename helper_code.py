@@ -7,6 +7,7 @@
 import numpy as np
 import os
 import sys
+import cv2
 
 ### Challenge data I/O functions
 
@@ -54,22 +55,60 @@ def load_image(record):
         image_file_path = os.path.join(path, image_file)
         if os.path.isfile(image_file_path):
             #Load image
-            image = Image.open(image_file_path)
-            image.show()
-            #Greyscale
-            image_greyscale = image.convert('L')
-            image_greyscale.show()
-            #Threshold
-            # TODO Add addaptive Gausian Thresholding
-            threshold = 115
-            image_thresholded = image_greyscale.point( lambda p: 255 if p > threshold else 0 )
-            image_thresholded.show()
-            # To mono
-            image_mono = image_thresholded.convert('1')
-            image_mono.show()
-            images.append(image_greyscale)
+            image = cv2.imread(image_file_path)#cv2.IMREAD_GRAYSCALE)
+            #image_thresholded = cv2.adaptiveThreshold(image,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            #        cv2.THRESH_BINARY,77,70)
+            image = clean_up_image((image))
+            image = adjust_rotation(image)
+
+            display(image)
+
+            images.append(image)
+
 
     return images
+
+
+def adjust_rotation(image):
+    canimg = cv2.Canny(image, 50, 150,apertureSize = 3)
+    lines= cv2.HoughLines(canimg, 1, np.pi/180.0, 250, np.array([]))
+    rho, theta = lines[0][0]
+    image = rotate_image(image, 180*theta/3.1415926 - 90)
+
+
+def clean_up_image(image):
+    image[:,:,1]=0
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    image = image_erosion(image)
+    image = image_dilation(image)
+    image = image_binarisation(image)
+    return image
+
+def rotate_image(image, angle):
+    image_center = tuple(np.array(image.shape[1::-1]) / 2)
+    rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+    result = cv2.warpAffine(image, rot_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+    return result
+
+
+def display(image):
+    cv2.imshow('img', image)
+    cv2.waitKey(0)
+
+
+def image_dilation(image):
+    kernel = np.ones((3,3), np.uint8)
+    return cv2.dilate(image, kernel)
+
+
+def image_binarisation(image):
+    ret3,th3 = cv2.threshold(image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    return th3
+
+def image_erosion(image):
+    kernel = np.ones((3, 3), np.uint8)
+    # Using cv2.erode() method 
+    return cv2.erode(image, kernel)
 
 def load_images(record):
     return load_image(record)
