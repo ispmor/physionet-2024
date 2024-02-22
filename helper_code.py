@@ -4,10 +4,13 @@
 # These are helper functions that you can use with your code.
 # Check the example code to see how to import these functions to your code.
 
+from re import A, I
+from typing import Tuple
 import numpy as np
 import os
 import sys
 import cv2
+from requests.models import LocationParseError
 
 ### Challenge data I/O functions
 
@@ -56,17 +59,50 @@ def load_image(record):
         if os.path.isfile(image_file_path):
             #Load image
             image = cv2.imread(image_file_path)#cv2.IMREAD_GRAYSCALE)
-            #image_thresholded = cv2.adaptiveThreshold(image,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
-            #        cv2.THRESH_BINARY,77,70)
-            image = clean_up_image((image))
-            image = adjust_rotation(image)
+            image = cv2.resize(image, (0,0), fx = 0.5, fy = 0.5)
+            image = clean_up_image(image)
+            image, lines = adjust_rotation(image)
+            
+            importantLines = list(filter(lambda line:
+                                         abs(getAngleFromPoints(line)) - 180 <= 2.5,
+                                         lines))
+            onlySingularLines =  getLinesNotCoveringEachOther(importantLines, 32)
 
-            display(image)
+            print("important lines below")
+            print(onlySingularLines)
+
+
+            for line in onlySingularLines:
+                x1,y1,x2,y2 = line
+                cv2.line(image,(x1,y1),(x2,y2),(0,255,0),2)
+            cv2.imshow('LINES', image)
+            cv2.waitKey(0)
 
             images.append(image)
 
 
     return images
+
+def getLinesNotCoveringEachOther(lines, maxgap):
+    lines_avg_y = list(map(lambda line: (line, (line[0][1] + line[0][3]) / 2), lines))
+    lines_avg_y.sort(key=lambda entry: entry[1])
+    groups = [[lines_avg_y[0]]]
+    for line_tuple in lines_avg_y[1:]:
+        if abs(line_tuple[1] - groups[-1][-1][1]) <= maxgap:
+            groups[-1].append(line_tuple)
+        else:
+            groups.append([line_tuple])
+
+    avg_groups = []
+    for g in groups:
+        only_arrays = np.concatenate([x[0] for x in g])
+        avg_groups.append(np.average(only_arrays, axis=0).astype(int))
+    return avg_groups
+
+def getAngleFromPoints(line: Tuple) -> float:
+    x1, y1, x2, y2 = line[0]
+    angle: float = np.arctan2(y1 - y2, x1 - x2) * 180 / np.pi
+    return angle
 
 
 def adjust_rotation(image):
@@ -74,7 +110,46 @@ def adjust_rotation(image):
     lines= cv2.HoughLines(canimg, 1, np.pi/180.0, 250, np.array([]))
     rho, theta = lines[0][0]
     image = rotate_image(image, 180*theta/3.1415926 - 90)
+    
+    min_length = int(image.shape[1] * .75)
+    max_gap = int(image.shape[1] * .15)
+    
+    canimg = cv2.Canny(image, 50, 150,apertureSize = 3)
+    lines = cv2.HoughLinesP(\
+            canimg,1,np.pi/180,min_length//7,minLineLength=min_length,maxLineGap=max_gap)
+    return (image, lines)
 
+
+def createLineBasedOnRhoAndTheta(image, lines):
+    points_to_draw
+    for line in lines:
+        rho, theta = line
+        a = cos(theta)
+        b = sin(theta)
+
+        x0 = a * rho
+        y0 = b * rho
+
+        c = 10 #arbitrary distance
+        x1 = x0 - c * b
+        y1 = y0 + c * b
+
+
+
+def debug_lines(image):
+    img = image.copy()
+    min_length = int(img.shape[1] * .75)
+    max_gap = int(img.shape[1] * .15)
+    canimg = cv2.Canny(image, 50, 150,apertureSize = 3)
+    lines = cv2.HoughLinesP(\
+            canimg,1,np.pi/180,min_length//7,minLineLength=min_length,maxLineGap=max_gap)
+    print(lines)
+
+    for line in lines:
+        x1,y1,x2,y2 = line[0]
+        cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
+    cv2.imshow('LINES', img)
+    cv2.waitKey(0)
 
 def clean_up_image(image):
     image[:,:,1]=0
@@ -87,7 +162,11 @@ def clean_up_image(image):
 def rotate_image(image, angle):
     image_center = tuple(np.array(image.shape[1::-1]) / 2)
     rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
-    result = cv2.warpAffine(image, rot_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+    result = cv2.warpAffine(image, rot_mat, image.shape[1::-1],
+                            flags=cv2.INTER_LINEAR,
+                            borderMode=cv2.BORDER_CONSTANT, borderValue=(255,
+                                                                         255,
+                                                                         255))
     return result
 
 

@@ -19,10 +19,10 @@ from helper_code import *
 
 import neptune
 
-run = neptune.init_run(
-    project="puszkarski.bartosz/physionet-2024",
-    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkMDE0MzMyMy0yYzFiLTRlMGMtYjk0NC01MjQ5NTcyZGM1YmMifQ==",
-)
+#run = neptune.init_run(
+#    project="puszkarski.bartosz/physionet-2024",
+#    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkMDE0MzMyMy0yYzFiLTRlMGMtYjk0NC01MjQ5NTcyZGM1YmMifQ==",
+#)
 
 ################################################################################
 #
