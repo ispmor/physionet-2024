@@ -10,8 +10,9 @@ import numpy as np
 import os
 import sys
 import cv2
+from pandas._libs.lib import is_datetime_with_singletz_array
 from requests.models import LocationParseError
-
+import pytesseract
 ### Challenge data I/O functions
 
 # Find the records in a folder and its subfolders.
@@ -59,7 +60,7 @@ def load_image(record):
         if os.path.isfile(image_file_path):
             #Load image
             image = cv2.imread(image_file_path)#cv2.IMREAD_GRAYSCALE)
-            image = cv2.resize(image, (0,0), fx = 0.5, fy = 0.5)
+            #image = cv2.resize(image, (0,0), fx = 0.5, fy = 0.5)
             image = clean_up_image(image)
             image, lines = adjust_rotation(image)
             
@@ -71,6 +72,15 @@ def load_image(record):
             print("important lines below")
             print(onlySingularLines)
 
+            image_for_ocr = prepare_for_ocr(image,
+                                            onlySingularLines,64)
+
+
+            ocr_data = pytesseract.image_to_data(
+                    image_for_ocr, 'eng',
+                    config="-c tessedit_char_whitelist=123456IiaAvVfFrRlL --psm 12")
+
+            print(ocr_data)
 
             for line in onlySingularLines:
                 x1,y1,x2,y2 = line
@@ -82,6 +92,21 @@ def load_image(record):
 
 
     return images
+
+
+def prepare_for_ocr(image, baselines, h):
+    res = image.copy()
+    w = image.shape[1]
+    neg_h = image.shape[0]//7
+    for line in baselines:
+        y = (line[1] + line [3]) // 2
+        res = cv2.rectangle(res, (0, y-neg_h), (w-1, (y+h//2)), (255, 255, 255), -1)
+        display(res)
+    return res
+
+
+
+
 
 def getLinesNotCoveringEachOther(lines, maxgap):
     lines_avg_y = list(map(lambda line: (line, (line[0][1] + line[0][3]) / 2), lines))

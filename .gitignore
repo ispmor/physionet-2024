@@ -1,3 +1,4 @@
 venv
 notes
 __pycache__
+*.swp
