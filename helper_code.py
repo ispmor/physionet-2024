@@ -72,8 +72,7 @@ def load_image(record):
             print("important lines below")
             print(onlySingularLines)
 
-            image = image_weak_erosion(image)
-            display(image)
+            image =cv2.medianBlur(image, 3)
 
             image_for_ocr = prepare_for_ocr(image,
                                             onlySingularLines,64)
@@ -211,9 +210,6 @@ def image_binarisation(image):
     ret3,th3 = cv2.threshold(image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return th3
 
-
-def image_weak_erosion(image): 
-    return cv2.medianBlur(image, 3)
 
 
 def image_erosion(image):
