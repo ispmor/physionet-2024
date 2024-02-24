@@ -72,6 +72,9 @@ def load_image(record):
             print("important lines below")
             print(onlySingularLines)
 
+            image = image_weak_erosion(image)
+            display(image)
+
             image_for_ocr = prepare_for_ocr(image,
                                             onlySingularLines,64)
 
@@ -101,7 +104,6 @@ def prepare_for_ocr(image, baselines, h):
     for line in baselines:
         y = (line[1] + line [3]) // 2
         res = cv2.rectangle(res, (0, y-neg_h), (w-1, (y+h//2)), (255, 255, 255), -1)
-        display(res)
     return res
 
 
@@ -208,6 +210,11 @@ def image_dilation(image):
 def image_binarisation(image):
     ret3,th3 = cv2.threshold(image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return th3
+
+
+def image_weak_erosion(image): 
+    return cv2.medianBlur(image, 3)
+
 
 def image_erosion(image):
     kernel = np.ones((3, 3), np.uint8)
