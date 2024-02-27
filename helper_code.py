@@ -10,10 +10,17 @@ import numpy as np
 import os
 import sys
 import cv2
+from pandas import DataFrame
 from pandas._libs.lib import is_datetime_with_singletz_array
 from requests.models import LocationParseError
 import pytesseract
+from Levenshtein import distance
 ### Challenge data I/O functions
+
+
+leads = ['i', 'ii', 'iii', 'avr', 'avf', 'avl', 'v1', 'v2', 'v3', 'v4', 'v5',
+         'v6']
+
 
 # Find the records in a folder and its subfolders.
 def find_records(folder):
@@ -47,10 +54,16 @@ def load_signal(record):
 def load_signals(record):
     return load_signal(record)
 
+
+def index_of_row_in_lines(row_top, lines, distance):
+    for idx, l in enumerate(lines):
+        if abs(row_top - ((l[1] + l[3]) // 2)) < (distance // 2):
+            return idx
+
+    return -1
+
 # Load the image(s) for a record.
 def load_image(record):
-    from PIL import Image, ImageOps
-
     path = os.path.split(record)[0]
     image_files = get_image_files(record)
 
@@ -63,14 +76,25 @@ def load_image(record):
             #image = cv2.resize(image, (0,0), fx = 0.5, fy = 0.5)
             image = clean_up_image(image)
             image, lines = adjust_rotation(image)
-            
+            max_h, max_w = image.shape
+
             importantLines = list(filter(lambda line:
                                          abs(getAngleFromPoints(line)) - 180 <= 2.5,
                                          lines))
             onlySingularLines =  getLinesNotCoveringEachOther(importantLines, 32)
 
-            print("important lines below")
-            print(onlySingularLines)
+            distances = []
+            if len(onlySingularLines) < 2:
+                distances = [max_h * 0.5]
+            else:
+                for i in range(1, len(onlySingularLines)):
+                    distances.append(((onlySingularLines[i][1] + onlySingularLines[i][3])
+                            // 2 -
+                            (onlySingularLines[i-1][1]+onlySingularLines[i-1][3])
+                             // 2))
+            # TODO naive approach to distanes assuming they are equal
+            distance = np.average(distances)
+
 
             image =cv2.medianBlur(image, 3)
 
@@ -78,22 +102,86 @@ def load_image(record):
                                             onlySingularLines,64)
 
 
-            ocr_data = pytesseract.image_to_data(
+            ocr_data: DataFrame = pytesseract.image_to_data(
                     image_for_ocr, 'eng',
-                    config="-c tessedit_char_whitelist=123456IiaAvVfFrRlL --psm 12")
+                    config="-c tessedit_char_whitelist=123456IaAvVfFrRlL --psm 12",
+                    output_type="data.frame")
 
-            print(ocr_data)
 
-            for line in onlySingularLines:
-                x1,y1,x2,y2 = line
-                cv2.line(image,(x1,y1),(x2,y2),(0,255,0),2)
-            cv2.imshow('LINES', image)
-            cv2.waitKey(0)
+            ocr_data.dropna(0, inplace=True, subset=['text'])
+            if ocr_data.empty:
+                continue
+
+            ocr_data['text']=ocr_data['text'].apply(lambda x: str(x).lower())
+            ocr_data['text_as_set'] = ocr_data['text'].apply(lambda x: set(x))
+            ocr_data['line'] = ocr_data['top'].apply(lambda x: index_of_row_in_lines(x, onlySingularLines, distance))
+            ocr_data.sort_values(['line', 'left'], inplace=True, ignore_index=True)
+            dict_leads = {}
+            for idx, row in ocr_data.iterrows():
+                for lead in leads:
+                    if row['text'] == lead or (
+                            set(lead).issubset(row['text_as_set']) and
+                            row['text'].endswith('i') and
+                            len(row['text_as_set']) >2 and len(set(lead)) > 1) :
+                        dict_leads[lead] = (idx,row)
+
+            sorted_dict_leads = sorted(dict_leads.items(), key=lambda x: x[1][0])
+
+            print(sorted_dict_leads)
+
+            dict_of_cropped_images = {}
+            for i in range(0, len(sorted_dict_leads)-1):
+                idx, row = sorted_dict_leads[i][1]
+                _, row_next = sorted_dict_leads[i+1][1]
+                lead_name = sorted_dict_leads[i][0]
+                line_idx = int(row['line'])
+                line_exists = line_idx >= 0
+                line = onlySingularLines[int(row['line'])] if line_idx >= 0 else  None
+                line_y = 0
+                local_min_h = 0
+                local_max_h = max_h
+                local_min_w = 0
+                local_max_w = max_w
+
+                if line_exists:
+                    line_y =int((line[1] + line[3])//2)
+                else:
+                    line_y = row['top']
+
+                if line_y + distance * 0.7 > max_h:
+                    local_max_h:int = max_h
+                else:
+                    local_max_h:int =  int(line_y + distance * 0.7)
+
+                if line_y - distance*0.7 < 0:
+                    local_min_h = 0
+                else:
+                    local_min_h =  int(line_y - distance*0.7)
+
+                #same line scenario
+                if abs(row['top'] - row_next['top']) < 15:
+                    local_min_w = row['left']
+                    local_max_w = row_next['left']
+                else:
+                    #next lead in new line scenario:
+                    local_min_w = row['left']
+                    local_max_w = max_w
+
+                dict_of_cropped_images[lead_name] = image[local_min_h:local_max_h, local_min_w: local_max_w] 
+
+
+            for key, cropped_image in dict_of_cropped_images.items():
+                cv2.imshow(key, cropped_image)
+                cv2.waitKey(0)
 
             images.append(image)
 
 
     return images
+
+
+
+
 
 
 def prepare_for_ocr(image, baselines, h):
