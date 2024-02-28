@@ -14,14 +14,15 @@ from pandas import DataFrame
 from pandas._libs.lib import is_datetime_with_singletz_array
 from requests.models import LocationParseError
 import pytesseract
-from Levenshtein import distance
 ### Challenge data I/O functions
 
 
 leads = ['i', 'ii', 'iii', 'avr', 'avf', 'avl', 'v1', 'v2', 'v3', 'v4', 'v5',
          'v6']
 
-
+ratio=0.75 #4/3
+target_height = 128
+target_width = int(target_height * ratio)
 # Find the records in a folder and its subfolders.
 def find_records(folder):
     records = set()
@@ -55,9 +56,9 @@ def load_signals(record):
     return load_signal(record)
 
 
-def index_of_row_in_lines(row_top, lines, distance):
+def index_of_row_in_lines(row_top, lines, distance_avg):
     for idx, l in enumerate(lines):
-        if abs(row_top - ((l[1] + l[3]) // 2)) < (distance // 2):
+        if abs(row_top - ((l[1] + l[3]) // 2)) < (distance_avg // 2):
             return idx
 
     return -1
@@ -77,7 +78,6 @@ def load_image(record):
             image = clean_up_image(image)
             image, lines = adjust_rotation(image)
             max_h, max_w = image.shape
-
             importantLines = list(filter(lambda line:
                                          abs(getAngleFromPoints(line)) - 180 <= 2.5,
                                          lines))
@@ -93,7 +93,7 @@ def load_image(record):
                             (onlySingularLines[i-1][1]+onlySingularLines[i-1][3])
                              // 2))
             # TODO naive approach to distanes assuming they are equal
-            distance = np.average(distances)
+            distance_avg = np.average(distances)
 
 
             image =cv2.medianBlur(image, 3)
@@ -109,79 +109,108 @@ def load_image(record):
 
 
             ocr_data.dropna(0, inplace=True, subset=['text'])
+            dict_flattened_images = {}
             if ocr_data.empty:
-                continue
+                for lead_name in leads:
+                    dict_flattened_images[lead_name]=np.zeros((target_height * target_width,))
+            else:
+                dict_flattened_images = build_input(image, ocr_data, onlySingularLines, distance_avg, max_w, max_h)
 
-            ocr_data['text']=ocr_data['text'].apply(lambda x: str(x).lower())
-            ocr_data['text_as_set'] = ocr_data['text'].apply(lambda x: set(x))
-            ocr_data['line'] = ocr_data['top'].apply(lambda x: index_of_row_in_lines(x, onlySingularLines, distance))
-            ocr_data.sort_values(['line', 'left'], inplace=True, ignore_index=True)
-            dict_leads = {}
-            for idx, row in ocr_data.iterrows():
-                for lead in leads:
-                    if row['text'] == lead or (
-                            set(lead).issubset(row['text_as_set']) and
-                            row['text'].endswith('i') and
-                            len(row['text_as_set']) >2 and len(set(lead)) > 1) :
-                        dict_leads[lead] = (idx,row)
-
-            sorted_dict_leads = sorted(dict_leads.items(), key=lambda x: x[1][0])
-
-            print(sorted_dict_leads)
-
-            dict_of_cropped_images = {}
-            for i in range(0, len(sorted_dict_leads)-1):
-                idx, row = sorted_dict_leads[i][1]
-                _, row_next = sorted_dict_leads[i+1][1]
-                lead_name = sorted_dict_leads[i][0]
-                line_idx = int(row['line'])
-                line_exists = line_idx >= 0
-                line = onlySingularLines[int(row['line'])] if line_idx >= 0 else  None
-                line_y = 0
-                local_min_h = 0
-                local_max_h = max_h
-                local_min_w = 0
-                local_max_w = max_w
-
-                if line_exists:
-                    line_y =int((line[1] + line[3])//2)
-                else:
-                    line_y = row['top']
-
-                if line_y + distance * 0.7 > max_h:
-                    local_max_h:int = max_h
-                else:
-                    local_max_h:int =  int(line_y + distance * 0.7)
-
-                if line_y - distance*0.7 < 0:
-                    local_min_h = 0
-                else:
-                    local_min_h =  int(line_y - distance*0.7)
-
-                #same line scenario
-                if abs(row['top'] - row_next['top']) < 15:
-                    local_min_w = row['left']
-                    local_max_w = row_next['left']
-                else:
-                    #next lead in new line scenario:
-                    local_min_w = row['left']
-                    local_max_w = max_w
-
-                dict_of_cropped_images[lead_name] = image[local_min_h:local_max_h, local_min_w: local_max_w] 
-
-
-            for key, cropped_image in dict_of_cropped_images.items():
-                cv2.imshow(key, cropped_image)
-                cv2.waitKey(0)
-
+            print(dict_flattened_images)
             images.append(image)
-
 
     return images
 
 
+def build_input(image, ocr_data, onlySingularLines, distance_avg, max_w, max_h):
+    sorted_dict_leads =extract_sorted_ocr_results(ocr_data, onlySingularLines, distance_avg)
+    dict_of_cropped_images = extract_cropped_images_for_leads(image, sorted_dict_leads, onlySingularLines, distance_avg, max_w, max_h)
+    dict_flattened_images = {}
+
+    for lead_name in leads:
+        if lead_name in dict_of_cropped_images:
+            dict_flattened_images[lead_name] = keepOnlyBiggestObject(dict_of_cropped_images[lead_name]).flatten()
+        else:
+            dict_flattened_images[lead_name]=np.zeros((target_height * target_width,))
+    return dict_flattened_images
 
 
+
+def extract_cropped_images_for_leads(image, sorted_dict_leads, onlySingularLines, distance_avg, max_w, max_h):
+    dict_of_cropped_images = {}
+    for i in range(0, len(sorted_dict_leads)-1):
+        idx, row = sorted_dict_leads[i][1]
+        _, row_next = sorted_dict_leads[i+1][1]
+        lead_name = sorted_dict_leads[i][0]
+        line_idx = int(row['line'])
+        line_exists = line_idx >= 0
+        line = onlySingularLines[int(row['line'])] if line_idx >= 0 else  None
+        line_y = 0
+        local_min_h = 0
+        local_max_h = max_h
+        local_min_w = 0
+        local_max_w = max_w
+
+        if line_exists:
+            line_y =int((line[1] + line[3])//2)
+        else:
+            line_y = row['top']
+
+        if line_y + distance_avg * 0.7 > max_h:
+            local_max_h:int = max_h
+        else:
+            local_max_h:int =  int(line_y + distance_avg * 0.7)
+
+        if line_y - distance_avg*0.7 < 0:
+            local_min_h = 0
+        else:
+            local_min_h =  int(line_y - distance_avg*0.7)
+
+        #same line scenario
+        if abs(row['top'] - row_next['top']) < 15:
+            local_min_w = row['left']
+            local_max_w = row_next['left']
+        else:
+            #next lead in new line scenario:
+            local_min_w = row['left']
+            local_max_w = max_w
+
+        dict_of_cropped_images[lead_name] = image[local_min_h:local_max_h, local_min_w: local_max_w] 
+    return dict_of_cropped_images
+
+
+
+def extract_sorted_ocr_results(ocr_data, onlySingularLines, distance_avg):
+    ocr_data['text']=ocr_data['text'].apply(lambda x: str(x).lower())
+    ocr_data['text_as_set'] = ocr_data['text'].apply(lambda x: set(x))
+    ocr_data['line'] = ocr_data['top'].apply(lambda x: index_of_row_in_lines(x, onlySingularLines, distance_avg))
+    ocr_data.sort_values(['line', 'left'], inplace=True, ignore_index=True)
+    dict_leads = {}
+    for idx, row in ocr_data.iterrows():
+        for lead in leads:
+            if row['text'] == lead or (
+                    set(lead).issubset(row['text_as_set']) and
+                    row['text'].endswith('i') and
+                    len(row['text_as_set']) >2 and len(set(lead)) > 1) :
+                dict_leads[lead] = (idx,row)
+    return sorted(dict_leads.items(), key=lambda x: x[1][0])
+
+
+def keepOnlyBiggestObject(image):
+    # Generate intermediate image; use morphological closing to keep parts of the brain together
+    inter = cv2.morphologyEx(image, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+
+    # Find largest contour in intermediate image
+    cnts, _ = cv2.findContours(inter, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    cnt = max(cnts, key=cv2.contourArea)
+
+    out = np.zeros(image.shape, np.uint8)
+    cv2.drawContours(out, [cnt], -1, 255, cv2.FILLED)
+
+    out = cv2.bitwise_and(image, out)
+    out = image_dilation(out)
+    out= cv2.resize(out, (target_height, target_width))
+    return out
 
 
 def prepare_for_ocr(image, baselines, h):
@@ -190,7 +219,7 @@ def prepare_for_ocr(image, baselines, h):
     neg_h = image.shape[0]//7
     for line in baselines:
         y = (line[1] + line [3]) // 2
-        res = cv2.rectangle(res, (0, y-neg_h), (w-1, (y+h//2)), (255, 255, 255), -1)
+        res = cv2.rectangle(res, (0, y-neg_h), (w-1, (y+h//2)), (0, 0, 0), -1)
     return res
 
 
@@ -234,21 +263,6 @@ def adjust_rotation(image):
     return (image, lines)
 
 
-def createLineBasedOnRhoAndTheta(image, lines):
-    points_to_draw
-    for line in lines:
-        rho, theta = line
-        a = cos(theta)
-        b = sin(theta)
-
-        x0 = a * rho
-        y0 = b * rho
-
-        c = 10 #arbitrary distance
-        x1 = x0 - c * b
-        y1 = y0 + c * b
-
-
 
 def debug_lines(image):
     img = image.copy()
@@ -278,9 +292,7 @@ def rotate_image(image, angle):
     rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
     result = cv2.warpAffine(image, rot_mat, image.shape[1::-1],
                             flags=cv2.INTER_LINEAR,
-                            borderMode=cv2.BORDER_CONSTANT, borderValue=(255,
-                                                                         255,
-                                                                         255))
+                            borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
     return result
 
 
@@ -289,21 +301,21 @@ def display(image):
     cv2.waitKey(0)
 
 
-def image_dilation(image):
+def image_dilation(image, iterations=1):
     kernel = np.ones((3,3), np.uint8)
-    return cv2.dilate(image, kernel)
+    return cv2.dilate(image, kernel, iterations=iterations)
 
 
 def image_binarisation(image):
-    ret3,th3 = cv2.threshold(image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    ret3,th3 = cv2.threshold(image,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
     return th3
 
 
 
-def image_erosion(image):
+def image_erosion(image, iterations=1):
     kernel = np.ones((3, 3), np.uint8)
     # Using cv2.erode() method 
-    return cv2.erode(image, kernel)
+    return cv2.erode(image, kernel, iterations=iterations)
 
 def load_images(record):
     return load_image(record)
